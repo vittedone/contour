@@ -1,0 +1,84 @@
+name: contour
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Укажите POSTGRES_DB в .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Укажите POSTGRES_USER в .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
+  api:
+    build: ./api
+    environment:
+      MAX_PDF_MB: ${MAX_PDF_MB:-16}
+      PGHOST: postgres
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_URL: ${REDIS_URL:?Укажите REDIS_URL в .env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    volumes:
+      - uploads:/data/uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 10
+
+  worker:
+    build: ./worker
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      HF_HOME: /models
+      MIN_SIMILARITY: ${MIN_SIMILARITY:-0.30}
+      EMBEDDING_THREADS: ${EMBEDDING_THREADS:-2}
+      MAX_PDF_PAGES: ${MAX_PDF_PAGES:-500}
+      MAX_WEB_MB: ${MAX_WEB_MB:-4}
+      REDIS_URL: ${REDIS_URL}
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - uploads:/data/uploads
+      - models:/models
+
+  web:
+    build: ./web
+    environment:
+      API_ORIGIN: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+
+volumes:
+  pgdata:
+  uploads:
+  models:

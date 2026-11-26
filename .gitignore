@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+uploads/
+*.pdf
+pgdata/
+node_modules/
+.next/
+__pycache__/
+.venv/
+*.tsbuildinfo

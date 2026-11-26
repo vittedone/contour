@@ -1,0 +1,27 @@
+name: Build containers
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out project
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Validate Compose configuration
+        run: docker compose --env-file .env.example config --quiet
+        env:
+          POSTGRES_PASSWORD: ci-build-only
+      - name: Build frontend, API and worker
+        run: docker compose --env-file .env.example build web api worker
+        env:
+          POSTGRES_PASSWORD: ci-build-only
