@@ -137,7 +137,7 @@ async def dispatch_loop(redis):
         try:
             await asyncio.to_thread(dispatch, queue)
         except Exception:
-            logging.exception("Не удалось передать источники в очередь")
+            logging.exception("Failed to enqueue pending jobs")
         await asyncio.sleep(2)
 
 @router.get("/research/{research_id}/sources/{source_id}/fragments")

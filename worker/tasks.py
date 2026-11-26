@@ -60,7 +60,7 @@ def process(source_id):
         elif isinstance(exc, JobTimeoutException):
             message = "Источник обрабатывался слишком долго. Попробуйте документ меньшего размера."
         else:
-            logging.exception("Ошибка обработки источника %s", source_id)
+            logging.exception("Failed to process source %s", source_id)
             message = "Не удалось обработать содержимое источника. Проверьте файл или ссылку."
         with psycopg.connect() as db:
             db.execute("UPDATE source SET status='error', error=%s "

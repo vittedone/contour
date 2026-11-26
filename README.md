@@ -1,102 +1,103 @@
-# Контур
+# Contour
 
-Локальное рабочее пространство для исследования вопроса по документам и ссылкам. Создайте исследование с вопросом, добавьте текстовый PDF или ссылку на публичную HTML-страницу и получите отчёт, из которого можно перейти к точной цитате и сравнить расхождения между источниками.
+Contour is a local research workspace for comparing evidence from PDFs and public web pages. Start with a question, add sources, and generate a report. Each claim links to a highlighted passage on a PDF page or in a saved web section, so you can read competing accounts in context. The application interface and sample research are in Russian.
 
-## Локальный запуск
+## Run locally
 
-Понадобится Docker с Compose v2 и поддержкой Linux-контейнеров. При первой сборке нужен доступ к реестрам образов и пакетов.
-
-Склонируйте репозиторий и перейдите в каталог проекта.
+Install Docker with Compose v2 and Linux container support. The first build needs internet access to download images and packages.
 
 ```sh
 git clone https://github.com/vittedone/contour.git
 cd contour
 ```
 
-1. В PowerShell выполните `Copy-Item .env.example .env`. В Linux или macOS используйте `cp .env.example .env`.
-2. Откройте `.env` и задайте собственное непустое значение `POSTGRES_PASSWORD`. При необходимости измените `WEB_PORT` и `API_PORT`.
-3. Соберите и запустите сервисы.
+1. Copy the environment template. Use `Copy-Item .env.example .env` in PowerShell or `cp .env.example .env` on Linux and macOS.
+2. Set a nonempty `POSTGRES_PASSWORD` in `.env`. Set `WEB_PORT` and `API_PORT` if you need different ports.
+3. Build and start the services from the repository root.
 
 ```sh
 docker compose up --build -d --wait
 docker compose ps
 ```
 
-При стандартных портах откройте [рабочее пространство](http://localhost:3000). [Статус API](http://localhost:8000/health) возвращает `{"status":"ok"}`, когда доступны PostgreSQL и Redis. Порты интерфейса и API привязаны к loopback. Redis и база доступны по именам сервисов только внутри Compose.
+With the default ports, open the [workspace](http://localhost:3000). The [API health endpoint](http://localhost:8000/health) returns `{"status":"ok"}` when PostgreSQL and Redis are reachable. The web and API ports bind to the loopback interface. PostgreSQL and Redis are accessible inside the Compose network.
 
-Для просмотра журналов выполните `docker compose logs -f`. Для остановки используйте `docker compose down`. Именованные тома сохраняются при остановке. После изменения кода повторите команду сборки и запуска.
+Use `docker compose logs -f` to follow the logs and `docker compose down` to stop the stack. Named volumes retain your data. After a code change, run the build and start command again.
 
-## Демонстрация за две минуты
+## Two-minute demo
 
-После запуска откройте [рабочее пространство](http://localhost:3000) и нажмите **«Открыть демоотчёт»**. Учебное исследование посвящено времени поездки после открытия выделенной полосы. Три вымышленных источника подготовлены специально для демонстрации.
+Open the workspace and select **Open demo report** («Открыть демоотчёт»). Three fictional sources describe how journey times changed after a dedicated bus lane opened.
 
-1. В отчёте перейдите к разделу **«Возможные противоречия»**. Сводка диспетчерской и контрольные рейсы дают оценку сокращения времени на **18 %**, дневник пассажиров — на **8 %**.
-2. Откройте ссылку под цитатой из дневника. Выделенный текст показывает оценку, а соседнее предложение поясняет, что пассажиры включили ожидание на остановке. Вернитесь в отчёт через историю браузера и откройте вторую позицию.
-3. В разделе **«Тезисы и свидетельства»** откройте обе ссылки под утверждением о 18 %. Это одинаковая формулировка в двух разных снимках. В разделе **«Пробелы и ограничения»** видно, почему сравнение требует проверки условий измерения.
+1. In **Possible contradictions** («Возможные противоречия»), compare the estimates. The dispatch log and the observer's notes report an **18%** reduction in journey time. The passenger diary reports **8%**.
+2. Follow the citation beneath the diary entry. The highlighted sentence contains the estimate. The next sentence explains that passengers included time spent waiting at the stop. Go back and open the other citation to compare the measurement methods.
+3. In **Claims and evidence** («Тезисы и свидетельства»), follow both references for the 18% figure. They lead to matching statements in two separate snapshots. **Gaps and limitations** («Пробелы и ограничения») identifies what still needs checking.
 
-API устанавливает демо и первую версию отчёта одной транзакцией при старте. На чистой базе пример появляется автоматически, на существующей — один раз. Снимки, границы цитат и заранее рассчитанная подборка находятся в `api/demo_materials.json`. Первоначальный показ работает без скачивания модели. Кнопка обновления поиска использует обычный worker и текущие настройки модели.
+On startup, the API installs the demo and its first report in a single transaction. Existing installations receive the demo once. The source material, citation offsets, and precomputed search results are in [demo_materials.json](api/demo_materials.json). You can read the demo before downloading the embedding model. Refreshing the search uses the regular worker and current model settings.
 
-## Архитектура
+## Architecture
 
 ```mermaid
 flowchart LR
-    Browser[Браузер] --> Web[Next.js]
+    Browser[Browser] --> Web[Next.js]
     Web --> API[FastAPI]
-    API -->|Исследования и версии отчёта| DB[(PostgreSQL + pgvector)]
-    API -->|Задания| Queue[(Redis)]
+    API -->|Research and report versions| DB[(PostgreSQL + pgvector)]
+    API -->|Jobs| Queue[(Redis)]
     Queue --> Worker[RQ worker]
-    API -->|Исходные PDF| Files[(Том uploads)]
+    API -->|Original PDFs| Files[(Uploads volume)]
     Files --> Worker
-    Worker -->|Текст, локаторы и векторы| DB
-    Worker -->|Скачивание при первом поиске| Model[(Локальная модель ONNX)]
+    Worker -->|Text, source locations and embeddings| DB
+    Worker -->|Download on first search| Model[(Local ONNX model)]
 ```
 
-## Состав проекта
-
-| Сервис | Назначение |
+| Service | Role |
 | --- | --- |
-| web | Next.js и TypeScript. Русскоязычные страницы обзора и источников. |
-| api | FastAPI. При старте применяет миграции и подключается к Redis. |
-| postgres | PostgreSQL 16 с расширением pgvector. Данные хранятся в томе `pgdata`. |
-| redis | Брокер очереди. Внутренний адрес задаётся через `REDIS_URL`. |
-| worker | Python-процесс RQ обрабатывает источники в очереди `contour`. |
+| `web` | Next.js and TypeScript frontend for research, sources, reports, and citation navigation. |
+| `api` | FastAPI backend. Applies migrations on startup and dispatches jobs to Redis. |
+| `postgres` | PostgreSQL 16 with pgvector. Stores research data in the `pgdata` volume. |
+| `redis` | Queue broker. The API and worker connect using `REDIS_URL`. |
+| `worker` | Python RQ worker that processes sources and runs semantic searches on the `contour` queue. |
 
-## Данные и настройки
+## Configuration and storage
 
-Начальные имя базы, пользователь и пароль PostgreSQL берутся из `.env` при создании тома. Для существующей базы смену учётных данных нужно согласовать с изменениями внутри PostgreSQL. API получает параметры соединения через переменные окружения.
+PostgreSQL takes its initial database name, user, and password from `.env` when it initializes the data volume. To change credentials for an existing database, update PostgreSQL and the connection settings together. The API reads its connection settings from environment variables.
 
-SQL-миграции находятся в `api/migrations`. API выполняет их по имени файла в одной транзакции под блокировкой PostgreSQL и записывает применённые имена в `schema_migrations`. Первая миграция включает расширение `vector`. Для изменения схемы добавляйте новый нумерованный SQL-файл.
+The API applies SQL migrations in filename order inside a single transaction protected by a PostgreSQL lock. It records applied filenames in `schema_migrations`. The first migration enables the `vector` extension. To change the schema, add a numbered SQL file under [api/migrations](api/migrations).
 
-Том `uploads` смонтирован в API и worker по адресу `/data/uploads` для хранения исходных PDF. Локальные файлы окружения, каталоги `uploads/` и `secrets/`, PDF и файлы закрытых ключей исключены из Git.
+The API and worker mount the `uploads` volume at `/data/uploads`. It holds original PDFs. Git ignores local environment files, `uploads/`, `secrets/`, PDFs, and private key files.
 
-## Обработка источников
+## Source processing
 
-API сохраняет запись источника в PostgreSQL. Диспетчер отправляет её в очередь RQ. Worker извлекает текст и одной транзакцией сохраняет разделы, фрагменты и статус готовности. Если Redis потеряет задание или worker остановится, диспетчер повторно передаст источник после истечения трёхминутного срока. После трёх прерванных попыток источник получает статус ошибки.
+The API saves each source in PostgreSQL and the dispatcher sends it to RQ. The worker extracts the text and saves the sections, fragments, and ready status in one transaction. If Redis loses a job or the worker stops, the dispatcher can requeue the source after three minutes. After three interrupted processing attempts, the source enters the error state.
 
-| Переменная | По умолчанию | Ограничение |
-| --- | --- | --- |
-| MAX_PDF_MB | 16 | Размер одного PDF в МиБ |
-| MAX_PDF_PAGES | 500 | Число страниц PDF |
-| MAX_WEB_MB | 4 | Размер HTML-ответа в МиБ |
+| Variable | Default | Limit |
+| --- | ---: | --- |
+| `MAX_PDF_MB` | 16 | Size of one PDF in MiB |
+| `MAX_PDF_PAGES` | 500 | Pages per PDF |
+| `MAX_WEB_MB` | 4 | Size of an HTML response in MiB |
 
-Worker загружает публичные HTML-страницы по HTTP или HTTPS. Он проверяет разрешённые DNS-адреса перед каждым соединением, включая перенаправления, и соединяется с проверенным IP. Загрузка выполняется без JavaScript. PDF должен содержать текстовый слой.
+PDFs need a text layer. The web loader accepts public HTTP and HTTPS pages and reads their HTML without running JavaScript. Before each connection, including redirects, it checks the resolved addresses and connects to a validated IP.
 
-Исходный PDF хранится под UUID в томе uploads. Для веб-страницы сохраняются исходный и конечный URL, HTML-снимок и текст по разделам. Каждый фрагмент ссылается на страницу PDF или раздел снимка и хранит полуоткрытый диапазон символов в сохранённом тексте. Позиции в базе начинаются с нуля, в интерфейсе — с единицы. Текст цитаты извлекается из этого снимка. Новые форматы подключаются через реестр EXTRACTORS в worker/extract.py.
+The original PDF is stored under its UUID. For a web page, Contour saves the requested URL, final URL, HTML snapshot, and extracted text by section. Each fragment points to a PDF page or web section and a half-open character range in the stored text. Database offsets start at zero. The interface displays one-based character positions. Citations are read from the saved text, so they remain reproducible if the live page changes. Additional formats can be registered in `EXTRACTORS` in [worker/extract.py](worker/extract.py).
 
-## Поиск фрагментов и черновые тезисы
+## Semantic search and draft claims
 
-В разделе источников выберите исследование и нажмите «Найти фрагменты и тезисы». Worker берёт готовые источники на момент начала поиска, включая материалы, добавленные до обновления. После добавления новых источников нажмите «Обновить результаты». Повторный запуск использует уже сохранённые векторы.
+Select a study on the sources page and choose **Find fragments and claims** («Найти фрагменты и тезисы»). The worker searches sources that are ready when the job starts, including previously uploaded material. After adding sources, choose **Refresh results** («Обновить результаты»). Subsequent searches reuse stored embeddings.
 
-При первом поиске worker скачивает файлы модели sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 с Hugging Face. Для загрузки нужен интернет и около 500 МБ свободного места в томе models. Дальнейшее кодирование текста и вопроса выполняется локально на CPU. Ревизия модели закреплена в worker/embeddings.py. При смене модели потребуется пересчитать сохранённые векторы.
+On the first search, the worker downloads `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` from Hugging Face. Allow about 500 MB in the `models` volume. The worker encodes text and questions locally on the CPU. The model revision is pinned in [worker/embeddings.py](worker/embeddings.py). Changing the model requires recomputing existing embeddings.
 
-PostgreSQL с pgvector ранжирует фрагменты внутри выбранного исследования по косинусному сходству с вопросом. Отбирается до 12 фрагментов. Из них worker выбирает до пяти дословных формулировок с привязкой к диапазону символов сохранённого текста. Ссылка под тезисом открывает фрагмент с выделенной цитатой. Близость к вопросу служит критерием отбора и не оценивает достоверность утверждения.
+Within each study, pgvector ranks fragments by cosine similarity to the research question. The worker takes up to 12 relevant fragments and selects up to five verbatim statements as draft claims. Each claim links to its exact character range. Similarity measures relevance to the question. Assessing the claim requires reading its evidence.
 
-MIN_SIMILARITY задаёт минимальное косинусное сходство для фрагментов и предложений (по умолчанию 0.30). EMBEDDING_THREADS задаёт число потоков CPU для модели (по умолчанию 2). Задание выполняется в существующей очереди RQ, поэтому первая загрузка модели может задержать другие задания.
+| Variable | Default | Purpose |
+| --- | ---: | --- |
+| `MIN_SIMILARITY` | 0.30 | Minimum cosine similarity for fragments and candidate statements |
+| `EMBEDDING_THREADS` | 2 | CPU threads available to the embedding model |
 
-## Противоречия и отчёт
+Search shares the RQ queue with source processing, so the initial model download can delay other jobs.
 
-Откройте «Отчёт исследования» на странице источников после семантического поиска и нажмите «Сформировать отчёт». Краткий ответ извлекается из наиболее релевантных тезисов. Для каждого свидетельства доступен сохранённый фрагмент с выделенной цитатой и расположением в источнике.
+## Contradictions and reports
 
-Приложение сопоставляет черновые тезисы с полными предложениями из найденных фрагментов других источников. Совпадающие формулировки показываются как дополнительные свидетельства. При одинаковом контексте проверяются явное отрицание, противоположное направление изменения и различие чисел с одной единицей измерения. Обе позиции отображаются рядом для проверки пользователем. Правила ограничены близкими формулировками на русском языке. Пустая подборка, единственный источник и расхождения отражаются в ограничениях отчёта.
+After a search finishes, open **Research report** («Отчёт исследования») on the sources page and choose **Generate report** («Сформировать отчёт»). The short answer draws on the selected claims. Each reference opens the saved fragment with its source location and the quotation highlighted.
 
-После обновления поиска нажмите «Обновить по результатам поиска». Изменённый отчёт сохраняется как новая версия в PostgreSQL. Предыдущие версии доступны через переключатель. Повторное формирование по тем же данным возвращает существующую версию.
+Contour compares draft claims with complete sentences from retrieved fragments in other sources. Matching wording provides additional references. For closely worded Russian statements, the rules flag direct negation, opposing directions of change, and different numerical values expressed in the same unit. The report presents both passages side by side for review and records gaps such as a lack of evidence, reliance on a single source, or an unresolved disagreement.
+
+After refreshing the search, choose **Update from search results** («Обновить по результатам поиска»). A changed report is saved as a new version in PostgreSQL. The version selector opens earlier reports. Generating the same report again returns the existing version.

@@ -115,7 +115,7 @@ def analyze(research_id):
                     """, [(research_id, i+1, r["section_id"], r["start_offset"], 1-r["distance"],
                            *claims.get(i, (None, None))) for i, r in enumerate(rows)])
         except Exception:
-            logging.exception("Ошибка семантического поиска для исследования %s", research_id)
+            logging.exception("Semantic search failed for research %s", research_id)
             db.execute("UPDATE analysis SET status='error', error=%s WHERE research_id=%s "
                        "AND status='processing' AND attempts=%s",
                        ("Поиск не завершился. Проверьте журнал worker и доступность модели, затем повторите.",
